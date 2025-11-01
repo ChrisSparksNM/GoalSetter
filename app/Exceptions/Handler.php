@@ -44,6 +44,23 @@ class Handler extends ExceptionHandler
                 'user_id' => auth()->id(),
             ]);
         });
+
+        // Handle mail-related exceptions specifically
+        $this->reportable(function (\Swift_TransportException $e) {
+            Log::error('Mail transport exception', [
+                'message' => $e->getMessage(),
+                'url' => request()->fullUrl(),
+                'user_id' => auth()->id(),
+            ]);
+        });
+
+        $this->reportable(function (\Symfony\Component\Mailer\Exception\TransportException $e) {
+            Log::error('Symfony mailer transport exception', [
+                'message' => $e->getMessage(),
+                'url' => request()->fullUrl(),
+                'user_id' => auth()->id(),
+            ]);
+        });
     }
 
     /**

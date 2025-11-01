@@ -52,6 +52,7 @@ class RegisteredUserController extends Controller
                 'onboarding_completed' => false,
             ]);
 
+            // Fire the registered event - our custom listener will handle email failures gracefully
             event(new Registered($user));
 
             Log::info('User registered successfully', [
@@ -64,6 +65,7 @@ class RegisteredUserController extends Controller
 
             // Don't auto-login user - they need to verify email first
             return redirect()->route('login')->with('success', 'Registration successful! Please check your email to verify your account before logging in.');
+            
         } catch (\Exception $e) {
             Log::error('User registration failed', [
                 'email' => $request->email,
