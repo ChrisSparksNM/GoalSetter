@@ -321,16 +321,23 @@
         let currentYear = currentDate.getFullYear();
         
         // Goals data for calendar
-        const goals = @json(Auth::user()->goals()->whereMonth('end_date', date('m'))->whereYear('end_date', date('Y'))->get()->map(function($goal) {
-            return [
-                'id' => $goal->id,
-                'title' => $goal->title,
-                'date' => $goal->end_date->format('Y-m-d'),
-                'status' => $goal->status,
-                'is_recurring' => $goal->is_recurring ?? false,
-                'recurrence_display' => $goal->recurrence_display ?? 'One-time'
-            ];
-        }));
+        @php
+            $currentMonthGoals = Auth::user()->goals()
+                ->whereMonth('end_date', date('m'))
+                ->whereYear('end_date', date('Y'))
+                ->get()
+                ->map(function($goal) {
+                    return [
+                        'id' => $goal->id,
+                        'title' => $goal->title,
+                        'date' => $goal->end_date->format('Y-m-d'),
+                        'status' => $goal->status,
+                        'is_recurring' => $goal->is_recurring ?? false,
+                        'recurrence_display' => $goal->recurrence_display ?? 'One-time'
+                    ];
+                });
+        @endphp
+        const goals = @json($currentMonthGoals);
         
         function generateCalendar(month, year) {
             const monthNames = [
