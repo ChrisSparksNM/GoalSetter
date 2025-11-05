@@ -62,36 +62,100 @@ class GoalController extends Controller
      */
     public function store(Request $request): RedirectResponse
     {
-        $validated = $request->validate([
+        $rules = [
             'title' => 'required|string|max:255',
             'description' => 'nullable|string|max:1000',
-            'end_date' => 'required|date|after:today',
-        ], [
+            'recurrence_type' => 'required|in:none,weekly,biweekly,monthly',
+        ];
+
+        // Conditional validation based on recurrence type
+        if ($request->recurrence_type === 'none') {
+            $rules['end_date'] = 'required|date|after:today';
+        } else {
+            $rules['start_date'] = 'required|date|after_or_equal:today';
+            $rules['recurrence_count'] = 'required|integer|min:1|max:52';
+        }
+
+        $validated = $request->validate($rules, [
             'title.required' => 'The goal title is required.',
             'title.max' => 'The goal title may not be greater than 255 characters.',
-            'end_date.required' => 'The end date is required.',
+            'end_date.required' => 'The end date is required for one-time goals.',
             'end_date.date' => 'The end date must be a valid date.',
             'end_date.after' => 'The end date must be a future date.',
+            'start_date.required' => 'The start date is required for recurring goals.',
+            'start_date.date' => 'The start date must be a valid date.',
+            'start_date.after_or_equal' => 'The start date must be today or in the future.',
+            'recurrence_count.required' => 'The number of occurrences is required for recurring goals.',
+            'recurrence_count.min' => 'At least 1 occurrence is required.',
+            'recurrence_count.max' => 'Maximum 52 occurrences allowed.',
             'description.max' => 'The description may not be greater than 1000 characters.',
         ]);
 
         try {
-            $goal = $request->user()->goals()->create([
-                'title' => $validated['title'],
-                'description' => $validated['description'] ?? null,
-                'end_date' => $validated['end_date'],
-                'status' => Goal::STATUS_ACTIVE,
-            ]);
+            if ($validated['recurrence_type'] === 'none') {
+                // Create a single goal
+                $goal = $request->user()->goals()->create([
+                    'title' => $validated['title'],
+                    'description' => $validated['description'] ?? null,
+                    'end_date' => $validated['end_date'],
+                    'status' => Goal::STATUS_ACTIVE,
+                    'is_recurring' => false,
+                    'recurrence_type' => Goal::RECURRENCE_NONE,
+                ]);
 
-            Log::info('Goal created successfully', [
-                'goal_id' => $goal->id,
-                'user_id' => $request->user()->id,
-                'title' => $goal->title,
-                'end_date' => $goal->end_date
-            ]);
+                $message = 'Goal created successfully!';
+                Log::info('Single goal created', ['goal_id' => $goal->id, 'user_id' => $request->user()->id]);
+            } else {
+                // Create recurring goal template
+                $parentGoal = $request->user()->goals()->create([
+                    'title' => $validated['title'],
+                    'description' => $validated['description'] ?? null,
+                    'start_date' => $validated['start_date'],
+                    'end_date' => $validated['start_date'], // First occurrence
+                    'status' => Goal::STATUS_ACTIVE,
+                    'is_recurring' => true,
+                    'recurrence_type' => $validated['recurrence_type'],
+                    'recurrence_count' => $validated['recurrence_count'],
+                    'next_due_date' => $validated['start_date'],
+                ]);
+
+                // Create individual goal instances
+                $createdGoals = 1;
+                $currentDate = \Carbon\Carbon::parse($validated['start_date']);
+                
+                for ($i = 1; $i < $validated['recurrence_count']; $i++) {
+                    $nextDate = match($validated['recurrence_type']) {
+                        'weekly' => $currentDate->copy()->addWeeks($i),
+                        'biweekly' => $currentDate->copy()->addWeeks($i * 2),
+                        'monthly' => $currentDate->copy()->addMonths($i),
+                        default => null,
+                    };
+
+                    if ($nextDate) {
+                        $request->user()->goals()->create([
+                            'title' => $validated['title'],
+                            'description' => $validated['description'] ?? null,
+                            'start_date' => $nextDate,
+                            'end_date' => $nextDate,
+                            'status' => Goal::STATUS_ACTIVE,
+                            'is_recurring' => false,
+                            'recurrence_type' => Goal::RECURRENCE_NONE,
+                            'parent_goal_id' => $parentGoal->id,
+                        ]);
+                        $createdGoals++;
+                    }
+                }
+
+                $message = "Recurring goal created successfully! {$createdGoals} goal instances scheduled.";
+                Log::info('Recurring goal created', [
+                    'parent_goal_id' => $parentGoal->id,
+                    'user_id' => $request->user()->id,
+                    'instances_created' => $createdGoals
+                ]);
+            }
 
             return redirect()->route('goals.index')
-                ->with('success', 'Goal created successfully!');
+                ->with('success', $message);
         } catch (\Exception $e) {
             Log::error('Failed to create goal', [
                 'user_id' => $request->user()->id,

@@ -42,9 +42,16 @@
                             <div class="p-6">
                                 <!-- Goal Header -->
                                 <div class="flex justify-between items-start mb-4">
-                                    <h3 class="text-lg font-semibold text-gray-900 truncate">
-                                        {{ $goal->title }}
-                                    </h3>
+                                    <div class="flex items-center space-x-2">
+                                        <h3 class="text-lg font-semibold text-gray-900 truncate">
+                                            {{ $goal->title }}
+                                        </h3>
+                                        @if($goal->is_recurring)
+                                            <span class="text-blue-500" title="Recurring Goal Template">🔄</span>
+                                        @elseif($goal->parent_goal_id)
+                                            <span class="text-gray-500" title="Part of Recurring Series">↻</span>
+                                        @endif
+                                    </div>
                                     <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
                                         @if($goal->status === 'active')
                                             @if($goal->isOverdue())
@@ -98,6 +105,23 @@
                                         <div class="flex justify-between text-sm">
                                             <span class="text-gray-500">Completed:</span>
                                             <span class="text-gray-900">{{ $goal->completed_at->format('M j, Y') }}</span>
+                                        </div>
+                                    @endif
+                                    @if($goal->is_recurring)
+                                        <div class="flex justify-between text-sm">
+                                            <span class="text-gray-500">Recurrence:</span>
+                                            <span class="text-blue-600 font-medium">{{ $goal->recurrence_display }}</span>
+                                        </div>
+                                        @if($goal->next_due_date)
+                                            <div class="flex justify-between text-sm">
+                                                <span class="text-gray-500">Next Due:</span>
+                                                <span class="text-gray-900">{{ $goal->next_due_date->format('M j, Y') }}</span>
+                                            </div>
+                                        @endif
+                                    @elseif($goal->parent_goal_id)
+                                        <div class="flex justify-between text-sm">
+                                            <span class="text-gray-500">Type:</span>
+                                            <span class="text-gray-600">Recurring Instance</span>
                                         </div>
                                     @endif
                                 </div>
